@@ -1,6 +1,77 @@
 @ConferenceHallBooking.Api_HostAddress = http://localhost:5105
+@ApiKey = dev-api-key-change-me
 
-GET {{ConferenceHallBooking.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Health
+GET {{ConferenceHallBooking.Api_HostAddress}}/health
+
+### Список залів
+GET {{ConferenceHallBooking.Api_HostAddress}}/api/v1/halls
+X-Api-Key: {{ApiKey}}
+
+### Пошук доступних
+GET {{ConferenceHallBooking.Api_HostAddress}}/api/v1/halls/available?start=2024-09-01T10:00:00&end=2024-09-01T14:00:00&requiredCapacity=50
+X-Api-Key: {{ApiKey}}
+
+### Створити зал
+POST {{ConferenceHallBooking.Api_HostAddress}}/api/v1/halls
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{
+  "name": "Зал D",
+  "capacity": 40,
+  "baseHourlyRate": 1800,
+  "services": [
+    { "name": "Проєктор", "price": 500 },
+    { "name": "Wi-Fi", "price": 300 }
+  ]
+}
+
+### Оновити зал (підставте ID)
+PUT {{ConferenceHallBooking.Api_HostAddress}}/api/v1/halls/00000000-0000-0000-0000-000000000000
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{
+  "name": "Зал А",
+  "capacity": 55,
+  "baseHourlyRate": 2500,
+  "services": [
+    { "name": "Проєктор", "price": 500 },
+    { "name": "Wi-Fi", "price": 300 },
+    { "name": "Звук", "price": 700 }
+  ]
+}
+
+### Видалити зал
+DELETE {{ConferenceHallBooking.Api_HostAddress}}/api/v1/halls/00000000-0000-0000-0000-000000000000
+X-Api-Key: {{ApiKey}}
+
+### Бронювання
+POST {{ConferenceHallBooking.Api_HostAddress}}/api/v1/bookings
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{
+  "hallId": "00000000-0000-0000-0000-000000000000",
+  "start": "2024-09-02T10:00:00",
+  "end": "2024-09-02T14:00:00",
+  "selectedServices": [ "Проєктор", "Wi-Fi" ],
+  "customerName": "ТОВ Приклад"
+}
+
+### Звіти
+GET {{ConferenceHallBooking.Api_HostAddress}}/api/v1/reports/summary
+X-Api-Key: {{ApiKey}}
 
 ###
+GET {{ConferenceHallBooking.Api_HostAddress}}/api/v1/reports/revenue-by-hall
+X-Api-Key: {{ApiKey}}
+
+###
+GET {{ConferenceHallBooking.Api_HostAddress}}/api/v1/reports/occupancy
+X-Api-Key: {{ApiKey}}
+
+###
+GET {{ConferenceHallBooking.Api_HostAddress}}/api/v1/reports/popular-services
+X-Api-Key: {{ApiKey}}

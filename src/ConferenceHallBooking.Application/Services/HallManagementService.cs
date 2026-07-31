@@ -60,7 +60,8 @@ public sealed class HallManagementService : IHallService
     {
         await _updateValidator.ValidateAndThrowAsync(request, cancellationToken);
 
-        var hall = await _hallRepository.GetByIdWithDetailsAsync(id, cancellationToken)
+        // Без Include(Services): інакше change tracker конфліктує з SetServicesAsync.
+        var hall = await _hallRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Зал з ID '{id}' не знайдено.");
 
         if (await _hallRepository.ExistsByNameAsync(request.Name, id, cancellationToken))
@@ -70,13 +71,17 @@ public sealed class HallManagementService : IHallService
 
         if (request.Services is not null)
         {
-            hall.ReplaceServices(request.Services.Select(s => new HallService(s.Name, s.Price)));
+            await _hallRepository.SetServicesAsync(
+                hall.Id,
+                request.Services.Select(s => (s.Name, s.Price)),
+                cancellationToken);
         }
 
         await _hallRepository.UpdateAsync(hall, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return DtoMapper.ToResponse(hall);
+        var updated = await _hallRepository.GetByIdWithDetailsAsync(id, cancellationToken);
+        return DtoMapper.ToResponse(updated!);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

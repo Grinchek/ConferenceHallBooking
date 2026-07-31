@@ -10,6 +10,7 @@ public interface IHallRepository
     Task<IReadOnlyList<Hall>> SearchAvailableAsync(DateTime start, DateTime end, int requiredCapacity, CancellationToken cancellationToken = default);
     Task AddAsync(Hall hall, CancellationToken cancellationToken = default);
     Task UpdateAsync(Hall hall, CancellationToken cancellationToken = default);
+    Task SetServicesAsync(Guid hallId, IEnumerable<(string Name, decimal Price)> services, CancellationToken cancellationToken = default);
     Task<bool> ExistsByNameAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default);
 }
 

@@ -67,11 +67,12 @@ public class Hall
             .Select(g => g.First())
             .ToList();
 
-        _services.Clear();
+        // Видаляємо по одному, щоб EF Core коректно відстежив Deleted для кожного елемента.
+        for (var i = _services.Count - 1; i >= 0; i--)
+            _services.RemoveAt(i);
+
         foreach (var service in distinct)
-        {
             _services.Add(new HallService(service.Name, service.Price, Id));
-        }
 
         UpdatedAtUtc = DateTime.UtcNow;
     }

@@ -16,12 +16,13 @@ public sealed class HallRepository : IHallRepository
 
     public Task<Hall?> GetByIdWithDetailsAsync(Guid id, CancellationToken cancellationToken = default) =>
         _db.Halls
+            .AsNoTracking()
             .Include(h => h.Services)
-            .Include(h => h.Bookings.Where(b => !b.IsCancelled))
             .FirstOrDefaultAsync(h => h.Id == id, cancellationToken);
 
     public async Task<IReadOnlyList<Hall>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await _db.Halls
+            .AsNoTracking()
             .Include(h => h.Services)
             .OrderBy(h => h.Name)
             .ToListAsync(cancellationToken);
@@ -32,15 +33,24 @@ public sealed class HallRepository : IHallRepository
         int requiredCapacity,
         CancellationToken cancellationToken = default)
     {
-        // Кандидати за місткістю
         var candidates = await _db.Halls
+            .AsNoTracking()
             .Include(h => h.Services)
-            .Include(h => h.Bookings.Where(b => !b.IsCancelled))
             .Where(h => h.Capacity >= requiredCapacity)
             .ToListAsync(cancellationToken);
 
+        var hallIds = candidates.Select(h => h.Id).ToList();
+        var busyHallIds = await _db.Bookings
+            .Where(b => hallIds.Contains(b.HallId)
+                        && !b.IsCancelled
+                        && b.StartUtc < end
+                        && b.EndUtc > start)
+            .Select(b => b.HallId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
         return candidates
-            .Where(h => h.IsAvailable(start, end))
+            .Where(h => !busyHallIds.Contains(h.Id))
             .OrderBy(h => h.BaseHourlyRate)
             .ToList();
     }
@@ -50,8 +60,30 @@ public sealed class HallRepository : IHallRepository
 
     public Task UpdateAsync(Hall hall, CancellationToken cancellationToken = default)
     {
-        _db.Halls.Update(hall);
+        var entry = _db.Entry(hall);
+        if (entry.State == EntityState.Detached)
+            _db.Halls.Update(hall);
+
         return Task.CompletedTask;
+    }
+
+    public async Task SetServicesAsync(
+        Guid hallId,
+        IEnumerable<(string Name, decimal Price)> services,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await _db.HallServices
+            .Where(s => s.HallId == hallId)
+            .ToListAsync(cancellationToken);
+
+        _db.HallServices.RemoveRange(existing);
+
+        var distinct = services
+            .GroupBy(s => s.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First());
+
+        foreach (var service in distinct)
+            await _db.HallServices.AddAsync(new HallService(service.Name, service.Price, hallId), cancellationToken);
     }
 
     public Task<bool> ExistsByNameAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default)
