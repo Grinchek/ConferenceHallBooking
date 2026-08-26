@@ -16,6 +16,7 @@ public sealed class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema("IGrinSchema");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }
