@@ -9,9 +9,11 @@ using Microsoft.AspNetCore.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(
-    builder.Configuration.GetConnectionString("Default")
-    ?? "Data Source=conference_halls.db");
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException(
+        "Connection string 'Default' is missing. Set it in appsettings or user secrets.");
+
+builder.Services.AddInfrastructure(connectionString);
 
 builder.Services.AddControllers();
 builder.Services.AddApiSwagger();
