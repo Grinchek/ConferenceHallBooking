@@ -1,6 +1,8 @@
 using ConferenceHallBooking.Domain.Entities;
 using ConferenceHallBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +13,8 @@ namespace ConferenceHallBooking.Infrastructure.Seed;
 /// </summary>
 public static class DatabaseSeeder
 {
+    private const string SchemaName = "IGrinSchema";
+
     private static readonly (string Name, decimal Price)[] DefaultServices =
     [
         ("Проєктор", 500m),
@@ -24,7 +28,8 @@ public static class DatabaseSeeder
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseSeeder");
 
-        await db.Database.EnsureCreatedAsync();
+        // EnsureCreated нічого не робить, якщо БД уже існує (типово для спільної Azure SQL).
+        await EnsureSchemaAndTablesAsync(db, logger);
 
         if (await db.Halls.IgnoreQueryFilters().AnyAsync())
         {
@@ -43,6 +48,30 @@ public static class DatabaseSeeder
         await db.SaveChangesAsync();
 
         logger.LogInformation("Початкові зали та послуги успішно додано.");
+    }
+
+    private static async Task EnsureSchemaAndTablesAsync(AppDbContext db, ILogger logger)
+    {
+        await db.Database.ExecuteSqlRawAsync($"""
+            IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'{SchemaName}')
+                EXEC(N'CREATE SCHEMA [{SchemaName}]');
+            """);
+
+        var hallsTableExists = await db.Database
+            .SqlQueryRaw<int>($"""
+                SELECT CASE
+                    WHEN OBJECT_ID(N'[{SchemaName}].[Halls]', N'U') IS NOT NULL THEN 1
+                    ELSE 0
+                END AS [Value]
+                """)
+            .SingleAsync() == 1;
+
+        if (hallsTableExists)
+            return;
+
+        var creator = db.GetService<IRelationalDatabaseCreator>();
+        await creator.CreateTablesAsync();
+        logger.LogInformation("Створено таблиці в схемі {Schema}.", SchemaName);
     }
 
     private static Hall CreateHall(string name, int capacity, decimal rate)
