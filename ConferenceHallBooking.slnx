@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/LoadTesting/">
+    <Project Path="ConferenceHallBooking.LoadTesting/ConferenceHallBooking.LoadTesting.csproj" Id="1bf11f2f-1304-422f-9b35-8c836a0544ed" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/ConferenceHallBooking.Api/ConferenceHallBooking.Api.csproj" />
     <Project Path="src/ConferenceHallBooking.Application/ConferenceHallBooking.Application.csproj" />
