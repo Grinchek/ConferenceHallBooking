@@ -92,8 +92,8 @@ public sealed class HallsController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<AvailableHallResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<AvailableHallResponse>>> SearchAvailable(
-        [FromQuery] DateTime start,
-        [FromQuery] DateTime end,
+        [FromQuery] DateTimeOffset start,
+        [FromQuery] DateTimeOffset end,
         [FromQuery] int requiredCapacity,
         CancellationToken cancellationToken)
     {

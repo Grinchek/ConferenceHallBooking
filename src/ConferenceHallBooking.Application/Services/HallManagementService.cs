@@ -114,16 +114,19 @@ public sealed class HallManagementService : IHallService
     {
         await _searchValidator.ValidateAndThrowAsync(request, cancellationToken);
 
+        var startUtc = request.Start.UtcDateTime;
+        var endUtc = request.End.UtcDateTime;
+
         var halls = await _hallRepository.SearchAvailableAsync(
-            request.Start,
-            request.End,
+            startUtc,
+            endUtc,
             request.RequiredCapacity,
             cancellationToken);
 
         return halls
             .Select(hall =>
             {
-                var pricing = _pricingCalculator.CalculateHallRental(hall.BaseHourlyRate, request.Start, request.End);
+                var pricing = _pricingCalculator.CalculateHallRental(hall.BaseHourlyRate, startUtc, endUtc);
                 return DtoMapper.ToAvailableResponse(hall, pricing.TotalHallCost);
             })
             .OrderBy(h => h.EstimatedHallRentalCost)

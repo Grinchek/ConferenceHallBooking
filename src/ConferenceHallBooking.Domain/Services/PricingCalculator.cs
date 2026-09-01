@@ -4,11 +4,12 @@ namespace ConferenceHallBooking.Domain.Services;
 
 /// <summary>
 /// Розраховує вартість оренди похвилинно з урахуванням тарифних періодів.
+/// Тарифні вікна визначені в UTC (той самий контракт, що й StartUtc/EndUtc у бронюваннях).
 /// <list type="bullet">
-/// <item>Ранкові години (06:00–09:00): −10%</item>
-/// <item>Стандартні години (09:00–18:00): базова ставка</item>
-/// <item>Пікові години (12:00–14:00): +15% (мають пріоритет над стандартними)</item>
-/// <item>Вечірні години (18:00–23:00): −20%</item>
+/// <item>Ранкові години (06:00–09:00 UTC): −10%</item>
+/// <item>Стандартні години (09:00–18:00 UTC): базова ставка</item>
+/// <item>Пікові години (12:00–14:00 UTC): +15% (мають пріоритет над стандартними)</item>
+/// <item>Вечірні години (18:00–23:00 UTC): −20%</item>
 /// </list>
 /// </summary>
 public sealed class PricingCalculator : IPricingCalculator
@@ -23,6 +24,9 @@ public sealed class PricingCalculator : IPricingCalculator
 
     public PricingResult CalculateHallRental(decimal baseHourlyRate, DateTime start, DateTime end)
     {
+        start = EnsureUtc(start);
+        end = EnsureUtc(end);
+
         if (end <= start)
             throw new ArgumentException("Інтервал бронювання має бути додатним.");
 
@@ -54,7 +58,7 @@ public sealed class PricingCalculator : IPricingCalculator
     }
 
     /// <summary>
-    /// Визначає тарифний період для моменту часу. Peak має найвищий пріоритет.
+    /// Визначає тарифний період для моменту часу (UTC). Peak має найвищий пріоритет.
     /// </summary>
     private static (PricingPeriod Period, decimal Multiplier) ResolvePeriod(TimeSpan timeOfDay)
     {
@@ -68,7 +72,7 @@ public sealed class PricingCalculator : IPricingCalculator
     }
 
     /// <summary>
-    /// Наступна межа тарифного сегмента (межі правил + північ).
+    /// Наступна межа тарифного сегмента (межі правил + північ UTC).
     /// </summary>
     private static DateTime NextBoundary(DateTime moment)
     {
@@ -88,4 +92,15 @@ public sealed class PricingCalculator : IPricingCalculator
     }
 
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
+
+    /// <summary>
+    /// Local → UTC; Unspecified трактуємо як уже UTC (контракт API з DateTimeOffset.UtcDateTime).
+    /// </summary>
+    private static DateTime EnsureUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
 }

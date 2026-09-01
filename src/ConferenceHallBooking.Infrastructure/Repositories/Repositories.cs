@@ -1,7 +1,9 @@
+using System.Data;
 using ConferenceHallBooking.Application.Interfaces;
 using ConferenceHallBooking.Domain.Entities;
 using ConferenceHallBooking.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ConferenceHallBooking.Infrastructure.Repositories;
 
@@ -145,6 +147,143 @@ public sealed class BookingRepository : IBookingRepository
                  && b.StartUtc < end
                  && b.EndUtc > start,
             cancellationToken);
+
+    public async Task<BookingCountsRow> GetBookingCountsAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var query = FilterByRange(_db.Bookings.AsNoTracking(), from, to);
+
+        var total = await query.CountAsync(cancellationToken);
+        var active = await query.CountAsync(b => !b.IsCancelled, cancellationToken);
+        var revenue = await query.Where(b => !b.IsCancelled).SumAsync(b => (decimal?)b.TotalCost, cancellationToken) ?? 0m;
+
+        return new BookingCountsRow(total, active, revenue);
+    }
+
+    public async Task<IReadOnlyList<HallRevenueRow>> GetRevenueByHallAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var activeBookings = FilterByRange(_db.Bookings.AsNoTracking(), from, to)
+            .Where(b => !b.IsCancelled);
+
+        var aggregated = await activeBookings
+            .GroupBy(b => b.HallId)
+            .Select(g => new
+            {
+                HallId = g.Key,
+                BookingsCount = g.Count(),
+                TotalRevenue = g.Sum(b => b.TotalCost),
+                HallRentalRevenue = g.Sum(b => b.HallRentalCost),
+                ServicesRevenue = g.Sum(b => b.ServicesCost)
+            })
+            .ToListAsync(cancellationToken);
+
+        var halls = await _db.Halls.AsNoTracking().ToListAsync(cancellationToken);
+        var byHallId = aggregated.ToDictionary(x => x.HallId);
+
+        return halls
+            .Select(hall =>
+            {
+                if (!byHallId.TryGetValue(hall.Id, out var row))
+                    return new HallRevenueRow(hall.Id, hall.Name, 0, 0, 0, 0);
+
+                return new HallRevenueRow(
+                    hall.Id,
+                    hall.Name,
+                    row.BookingsCount,
+                    row.TotalRevenue,
+                    row.HallRentalRevenue,
+                    row.ServicesRevenue);
+            })
+            .OrderByDescending(r => r.TotalRevenue)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<HallOccupancyRow>> GetOccupancyByHallAsync(
+        DateTime rangeStart,
+        DateTime rangeEnd,
+        CancellationToken cancellationToken = default)
+    {
+        // Тільки перетин бронювання з періодом звіту (кліпінг у SQL через умовні вирази).
+        var overlaps = await _db.Bookings.AsNoTracking()
+            .Where(b => !b.IsCancelled && b.StartUtc < rangeEnd && b.EndUtc > rangeStart)
+            .Select(b => new
+            {
+                b.HallId,
+                OverlapStart = b.StartUtc > rangeStart ? b.StartUtc : rangeStart,
+                OverlapEnd = b.EndUtc < rangeEnd ? b.EndUtc : rangeEnd
+            })
+            .ToListAsync(cancellationToken);
+
+        var hoursByHall = overlaps
+            .GroupBy(x => x.HallId)
+            .ToDictionary(
+                g => g.Key,
+                g => (
+                    Count: g.Count(),
+                    Hours: g.Sum(x => (decimal)(x.OverlapEnd - x.OverlapStart).TotalHours)));
+
+        var halls = await _db.Halls.AsNoTracking().ToListAsync(cancellationToken);
+
+        return halls
+            .Select(hall =>
+            {
+                hoursByHall.TryGetValue(hall.Id, out var stats);
+                return new HallOccupancyRow(
+                    hall.Id,
+                    hall.Name,
+                    hall.Capacity,
+                    stats.Count,
+                    Math.Round(stats.Hours, 2, MidpointRounding.AwayFromZero));
+            })
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<PopularServiceRow>> GetPopularServicesAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var bookingIds = FilterByRange(_db.Bookings.AsNoTracking(), from, to)
+            .Where(b => !b.IsCancelled)
+            .Select(b => b.Id);
+
+        return await _db.BookingServiceItems.AsNoTracking()
+            .Where(s => bookingIds.Contains(s.BookingId))
+            .GroupBy(s => s.Name)
+            .Select(g => new PopularServiceRow(
+                g.Key,
+                g.Count(),
+                g.Sum(s => s.Price)))
+            .OrderByDescending(s => s.TimesBooked)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PeriodBookingRow>> GetBookingsGroupedByStartHourAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        return await FilterByRange(_db.Bookings.AsNoTracking(), from, to)
+            .Where(b => !b.IsCancelled)
+            .Select(b => new PeriodBookingRow(b.StartUtc, b.TotalCost))
+            .ToListAsync(cancellationToken);
+    }
+
+    private static IQueryable<Booking> FilterByRange(IQueryable<Booking> query, DateTime? from, DateTime? to)
+    {
+        if (from.HasValue)
+            query = query.Where(b => b.EndUtc > from.Value);
+
+        if (to.HasValue)
+            query = query.Where(b => b.StartUtc < to.Value);
+
+        return query;
+    }
 }
 
 public sealed class UnitOfWork : IUnitOfWork
@@ -155,4 +294,24 @@ public sealed class UnitOfWork : IUnitOfWork
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _db.SaveChangesAsync(cancellationToken);
+
+    public async Task ExecuteInTransactionAsync(
+        Func<CancellationToken, Task> action,
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default)
+    {
+        await using IDbContextTransaction transaction =
+            await _db.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
+
+        try
+        {
+            await action(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
 }

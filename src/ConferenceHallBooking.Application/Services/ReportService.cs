@@ -1,12 +1,14 @@
 using ConferenceHallBooking.Application.DTOs.Reports;
 using ConferenceHallBooking.Application.Interfaces;
 using ConferenceHallBooking.Domain.Enums;
+using ConferenceHallBooking.Domain.Exceptions;
 using ConferenceHallBooking.Domain.Services;
 
 namespace ConferenceHallBooking.Application.Services;
 
 /// <summary>
 /// Бізнес-аналітика: виручка, завантаженість залів, популярні послуги.
+/// Агрегації виконуються на рівні запитів до БД (EF → SQL).
 /// </summary>
 public sealed class ReportService : IReportService
 {
@@ -29,23 +31,23 @@ public sealed class ReportService : IReportService
         DateTime? to = null,
         CancellationToken cancellationToken = default)
     {
+        EnsureValidRange(from, to);
+
+        var counts = await _bookingRepository.GetBookingCountsAsync(from, to, cancellationToken);
         var revenue = await GetRevenueByHallAsync(from, to, cancellationToken);
         var occupancy = await GetOccupancyAsync(from, to, cancellationToken);
         var popular = await GetPopularServicesAsync(from, to, cancellationToken);
         var byPeriod = await GetBookingsByPeriodAsync(from, to, cancellationToken);
-
         var halls = await _hallRepository.GetAllAsync(cancellationToken);
-        var bookings = await GetFilteredBookingsAsync(from, to, cancellationToken);
-
-        var totalRevenue = bookings.Sum(b => b.TotalCost);
-        var active = bookings.Count;
 
         return new AnalyticsSummaryDto(
             halls.Count,
-            active,
-            active,
-            totalRevenue,
-            active == 0 ? 0 : Math.Round(totalRevenue / active, 2),
+            counts.TotalBookings,
+            counts.ActiveBookings,
+            counts.ActiveRevenue,
+            counts.ActiveBookings == 0
+                ? 0
+                : Math.Round(counts.ActiveRevenue / counts.ActiveBookings, 2),
             revenue,
             occupancy,
             popular,
@@ -57,22 +59,17 @@ public sealed class ReportService : IReportService
         DateTime? to = null,
         CancellationToken cancellationToken = default)
     {
-        var halls = await _hallRepository.GetAllAsync(cancellationToken);
-        var bookings = await GetFilteredBookingsAsync(from, to, cancellationToken);
+        EnsureValidRange(from, to);
 
-        return halls
-            .Select(hall =>
-            {
-                var hallBookings = bookings.Where(b => b.HallId == hall.Id).ToList();
-                return new RevenueByHallDto(
-                    hall.Id,
-                    hall.Name,
-                    hallBookings.Count,
-                    hallBookings.Sum(b => b.TotalCost),
-                    hallBookings.Sum(b => b.HallRentalCost),
-                    hallBookings.Sum(b => b.ServicesCost));
-            })
-            .OrderByDescending(r => r.TotalRevenue)
+        var rows = await _bookingRepository.GetRevenueByHallAsync(from, to, cancellationToken);
+        return rows
+            .Select(r => new RevenueByHallDto(
+                r.HallId,
+                r.HallName,
+                r.BookingsCount,
+                r.TotalRevenue,
+                r.HallRentalRevenue,
+                r.ServicesRevenue))
             .ToList();
     }
 
@@ -81,26 +78,24 @@ public sealed class ReportService : IReportService
         DateTime? to = null,
         CancellationToken cancellationToken = default)
     {
+        EnsureValidRange(from, to);
+
         var rangeStart = from ?? DateTime.UtcNow.Date.AddDays(-30);
         var rangeEnd = to ?? DateTime.UtcNow.Date.AddDays(1);
         var availableHours = Math.Max((decimal)(rangeEnd - rangeStart).TotalHours, 1m);
 
-        var halls = await _hallRepository.GetAllAsync(cancellationToken);
-        var bookings = await GetFilteredBookingsAsync(rangeStart, rangeEnd, cancellationToken);
+        var rows = await _bookingRepository.GetOccupancyByHallAsync(rangeStart, rangeEnd, cancellationToken);
 
-        return halls
-            .Select(hall =>
+        return rows
+            .Select(row =>
             {
-                var hallBookings = bookings.Where(b => b.HallId == hall.Id).ToList();
-                var bookedHours = hallBookings.Sum(b => b.DurationHours);
-                var occupancy = Math.Round(bookedHours / availableHours * 100m, 2);
-
+                var occupancy = Math.Round(row.BookedHours / availableHours * 100m, 2);
                 return new OccupancyReportDto(
-                    hall.Id,
-                    hall.Name,
-                    hall.Capacity,
-                    hallBookings.Count,
-                    bookedHours,
+                    row.HallId,
+                    row.HallName,
+                    row.Capacity,
+                    row.BookingsCount,
+                    row.BookedHours,
                     Math.Min(occupancy, 100m));
             })
             .OrderByDescending(o => o.OccupancyPercent)
@@ -112,16 +107,11 @@ public sealed class ReportService : IReportService
         DateTime? to = null,
         CancellationToken cancellationToken = default)
     {
-        var bookings = await GetFilteredBookingsAsync(from, to, cancellationToken);
+        EnsureValidRange(from, to);
 
-        return bookings
-            .SelectMany(b => b.SelectedServices)
-            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new PopularServiceDto(
-                g.First().Name,
-                g.Count(),
-                g.Sum(s => s.Price)))
-            .OrderByDescending(s => s.TimesBooked)
+        var rows = await _bookingRepository.GetPopularServicesAsync(from, to, cancellationToken);
+        return rows
+            .Select(r => new PopularServiceDto(r.ServiceName, r.TimesBooked, r.TotalRevenue))
             .ToList();
     }
 
@@ -130,13 +120,12 @@ public sealed class ReportService : IReportService
         DateTime? to,
         CancellationToken cancellationToken)
     {
-        var bookings = await GetFilteredBookingsAsync(from, to, cancellationToken);
+        var bookings = await _bookingRepository.GetBookingsGroupedByStartHourAsync(from, to, cancellationToken);
         var counters = Enum.GetValues<PricingPeriod>()
             .ToDictionary(p => p.ToString(), _ => (Count: 0, Revenue: 0m));
 
         foreach (var booking in bookings)
         {
-            // Класифікуємо бронювання за тарифним періодом старту
             var pricing = _pricingCalculator.CalculateHallRental(1m, booking.StartUtc, booking.StartUtc.AddMinutes(1));
             var period = pricing.Breakdown.FirstOrDefault()?.PeriodName ?? PricingPeriod.Standard.ToString();
 
@@ -153,25 +142,9 @@ public sealed class ReportService : IReportService
             .ToList();
     }
 
-    private async Task<IReadOnlyList<Domain.Entities.Booking>> GetFilteredBookingsAsync(
-        DateTime? from,
-        DateTime? to,
-        CancellationToken cancellationToken)
+    private static void EnsureValidRange(DateTime? from, DateTime? to)
     {
-        IReadOnlyList<Domain.Entities.Booking> bookings;
-
-        if (from.HasValue || to.HasValue)
-        {
-            bookings = await _bookingRepository.GetByDateRangeAsync(
-                from ?? DateTime.MinValue,
-                to ?? DateTime.MaxValue,
-                cancellationToken);
-        }
-        else
-        {
-            bookings = await _bookingRepository.GetAllAsync(includeCancelled: false, cancellationToken);
-        }
-
-        return bookings.Where(b => !b.IsCancelled).ToList();
+        if (from.HasValue && to.HasValue && from > to)
+            throw new BusinessRuleException("Параметр 'from' не може бути пізніше за 'to'.");
     }
 }
