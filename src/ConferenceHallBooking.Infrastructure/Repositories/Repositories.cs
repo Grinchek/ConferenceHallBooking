@@ -33,29 +33,18 @@ public sealed class HallRepository : IHallRepository
         DateTime start,
         DateTime end,
         int requiredCapacity,
-        CancellationToken cancellationToken = default)
-    {
-        var candidates = await _db.Halls
+        CancellationToken cancellationToken = default) =>
+        await _db.Halls
             .AsNoTracking()
             .Include(h => h.Services)
             .Where(h => h.Capacity >= requiredCapacity)
-            .ToListAsync(cancellationToken);
-
-        var hallIds = candidates.Select(h => h.Id).ToList();
-        var busyHallIds = await _db.Bookings
-            .Where(b => hallIds.Contains(b.HallId)
-                        && !b.IsCancelled
-                        && b.StartUtc < end
-                        && b.EndUtc > start)
-            .Select(b => b.HallId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        return candidates
-            .Where(h => !busyHallIds.Contains(h.Id))
+            .Where(h => !_db.Bookings.Any(b =>
+                b.HallId == h.Id
+                && !b.IsCancelled
+                && b.StartUtc < end
+                && b.EndUtc > start))
             .OrderBy(h => h.BaseHourlyRate)
-            .ToList();
-    }
+            .ToListAsync(cancellationToken);
 
     public async Task AddAsync(Hall hall, CancellationToken cancellationToken = default) =>
         await _db.Halls.AddAsync(hall, cancellationToken);
