@@ -104,6 +104,6 @@ public sealed class BookingService : IBookingService
             throw new BusinessRuleException("Бронювання вже скасовано.");
 
         booking.Cancel();
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _bookingRepository.UpdateAsync(booking, cancellationToken);
     }
 }

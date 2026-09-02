@@ -1,8 +1,9 @@
 using ConferenceHallBooking.Application.Interfaces;
-using ConferenceHallBooking.Infrastructure.Persistence;
+using ConferenceHallBooking.Infrastructure.Data;
+using ConferenceHallBooking.Infrastructure.Health;
 using ConferenceHallBooking.Infrastructure.Repositories;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace ConferenceHallBooking.Infrastructure;
 
@@ -10,8 +11,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(connectionString));
+        services.AddSingleton<ISqlConnectionFactory>(new SqlConnectionFactory(connectionString));
+        services.AddScoped<SqlSession>();
 
         services.AddScoped<IHallRepository, HallRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();
@@ -19,4 +20,7 @@ public static class DependencyInjection
 
         return services;
     }
+
+    public static IHealthChecksBuilder AddDatabaseHealthCheck(this IHealthChecksBuilder builder) =>
+        builder.AddCheck<SqlConnectionHealthCheck>("sqlserver");
 }

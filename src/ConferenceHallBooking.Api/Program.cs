@@ -20,7 +20,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddApiSwagger();
 
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ConferenceHallBooking.Infrastructure.Persistence.AppDbContext>();
+    .AddDatabaseHealthCheck();
 
 // Захист від зловживань: rate limiting
 builder.Services.AddRateLimiter(options =>

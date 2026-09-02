@@ -29,7 +29,33 @@ public class Hall
 
     private Hall()
     {
-        // Для EF Core
+    }
+
+    internal static Hall Restore(
+        Guid id,
+        string name,
+        int capacity,
+        decimal baseHourlyRate,
+        bool isDeleted,
+        DateTime createdAtUtc,
+        DateTime? updatedAtUtc)
+    {
+        return new Hall
+        {
+            Id = id,
+            Name = name,
+            Capacity = capacity,
+            BaseHourlyRate = baseHourlyRate,
+            IsDeleted = isDeleted,
+            CreatedAtUtc = createdAtUtc,
+            UpdatedAtUtc = updatedAtUtc
+        };
+    }
+
+    internal void RestoreServices(IEnumerable<HallService> services)
+    {
+        _services.Clear();
+        _services.AddRange(services);
     }
 
     public Hall(string name, int capacity, decimal baseHourlyRate, IEnumerable<HallService>? services = null)

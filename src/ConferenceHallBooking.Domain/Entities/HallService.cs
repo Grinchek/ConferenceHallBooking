@@ -19,6 +19,15 @@ public class HallService
     {
     }
 
+    internal static HallService Restore(Guid id, Guid hallId, string name, decimal price) =>
+        new()
+        {
+            Id = id,
+            HallId = hallId,
+            Name = name,
+            Price = price
+        };
+
     public HallService(string name, decimal price, Guid hallId = default)
     {
         if (string.IsNullOrWhiteSpace(name))

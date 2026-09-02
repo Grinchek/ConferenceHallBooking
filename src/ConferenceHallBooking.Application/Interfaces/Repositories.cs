@@ -20,6 +20,7 @@ public interface IBookingRepository
     Task<IReadOnlyList<Booking>> GetAllAsync(bool includeCancelled = false, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Booking>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken cancellationToken = default);
     Task AddAsync(Booking booking, CancellationToken cancellationToken = default);
+    Task UpdateAsync(Booking booking, CancellationToken cancellationToken = default);
     Task<bool> HasOverlapAsync(Guid hallId, DateTime start, DateTime end, CancellationToken cancellationToken = default);
 
     Task<BookingCountsRow> GetBookingCountsAsync(DateTime? from, DateTime? to, CancellationToken cancellationToken = default);

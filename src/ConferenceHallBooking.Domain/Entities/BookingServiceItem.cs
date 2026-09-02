@@ -18,6 +18,15 @@ public class BookingServiceItem
     {
     }
 
+    internal static BookingServiceItem Restore(Guid id, Guid bookingId, string name, decimal price) =>
+        new()
+        {
+            Id = id,
+            BookingId = bookingId,
+            Name = name,
+            Price = price
+        };
+
     public BookingServiceItem(string name, decimal price)
     {
         Name = name;
