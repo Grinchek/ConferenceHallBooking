@@ -67,11 +67,33 @@ public static class DatabaseSeeder
             .SingleAsync() == 1;
 
         if (hallsTableExists)
+        {
+            await EnsureBookingHallNameColumnAsync(db, logger);
             return;
+        }
 
         var creator = db.GetService<IRelationalDatabaseCreator>();
         await creator.CreateTablesAsync();
         logger.LogInformation("Створено таблиці в схемі {Schema}.", SchemaName);
+    }
+
+    private static async Task EnsureBookingHallNameColumnAsync(AppDbContext db, ILogger logger)
+    {
+        await db.Database.ExecuteSqlRawAsync($"""
+            IF COL_LENGTH(N'[{SchemaName}].[Bookings]', N'HallName') IS NULL
+            BEGIN
+                ALTER TABLE [{SchemaName}].[Bookings]
+                ADD [HallName] nvarchar(100) NOT NULL
+                    CONSTRAINT [DF_Bookings_HallName] DEFAULT (N'');
+
+                UPDATE b
+                SET b.[HallName] = COALESCE(NULLIF(h.[Name], N''), N'Unknown')
+                FROM [{SchemaName}].[Bookings] b
+                LEFT JOIN [{SchemaName}].[Halls] h ON h.[Id] = b.[HallId];
+            END
+            """);
+
+        logger.LogInformation("Перевірено колонку HallName у таблиці Bookings.");
     }
 
     private static Hall CreateHall(string name, int capacity, decimal rate)

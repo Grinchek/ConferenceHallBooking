@@ -24,8 +24,13 @@ public static class DtoMapper
             hall.Services.Select(s => new ServiceDto(s.Name, s.Price)).ToList(),
             estimatedCost);
 
-    public static BookingResponse ToResponse(Booking booking, string hallName, PricingResult? pricing = null) =>
-        new(
+    public static BookingResponse ToResponse(Booking booking, PricingResult? pricing = null)
+    {
+        var hallName = !string.IsNullOrWhiteSpace(booking.HallName)
+            ? booking.HallName
+            : booking.Hall?.Name ?? "Unknown";
+
+        return new(
             booking.Id,
             booking.HallId,
             hallName,
@@ -44,4 +49,5 @@ public static class DtoMapper
                 b.Multiplier,
                 b.Cost)).ToList()
             ?? []);
+    }
 }

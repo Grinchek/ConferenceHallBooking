@@ -34,12 +34,11 @@ public sealed class BookingService : IBookingService
     {
         await _validator.ValidateAndThrowAsync(request, cancellationToken);
 
+        var startUtc = request.Start.UtcDateTime;
+        var endUtc = request.End.UtcDateTime;
+
         var hall = await _hallRepository.GetByIdWithDetailsAsync(request.HallId, cancellationToken)
             ?? throw new NotFoundException($"Зал з ID '{request.HallId}' не знайдено.");
-
-        if (await _bookingRepository.HasOverlapAsync(request.HallId, request.Start, request.End, cancellationToken))
-            throw new ConflictException(
-                $"Зал '{hall.Name}' уже заброньовано на період {request.Start:g} – {request.End:g}.");
 
         var selectedNames = (request.SelectedServices ?? [])
             .Select(s => s.Trim())
@@ -58,22 +57,34 @@ public sealed class BookingService : IBookingService
             serviceItems.Add(new BookingServiceItem(hallService.Name, hallService.Price));
         }
 
-        var pricing = _pricingCalculator.CalculateHallRental(hall.BaseHourlyRate, request.Start, request.End);
-        var durationHours = Math.Round((decimal)(request.End - request.Start).TotalHours, 2, MidpointRounding.AwayFromZero);
+        var pricing = _pricingCalculator.CalculateHallRental(hall.BaseHourlyRate, startUtc, endUtc);
+        var durationHours = Math.Round((decimal)(endUtc - startUtc).TotalHours, 2, MidpointRounding.AwayFromZero);
 
-        var booking = new Booking(
-            hall.Id,
-            request.Start,
-            request.End,
-            durationHours,
-            pricing.TotalHallCost,
-            serviceItems,
-            request.CustomerName);
+        Booking? created = null;
 
-        await _bookingRepository.AddAsync(booking, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // Serializable + повторна перевірка overlap захищають від подвійного бронювання
+        // при паралельних запитах на той самий інтервал.
+        await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            if (await _bookingRepository.HasOverlapAsync(request.HallId, startUtc, endUtc, ct))
+                throw new ConflictException(
+                    $"Зал '{hall.Name}' уже заброньовано на період {startUtc:g} – {endUtc:g}.");
 
-        return DtoMapper.ToResponse(booking, hall.Name, pricing);
+            created = new Booking(
+                hall.Id,
+                hall.Name,
+                startUtc,
+                endUtc,
+                durationHours,
+                pricing.TotalHallCost,
+                serviceItems,
+                request.CustomerName);
+
+            await _bookingRepository.AddAsync(created, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+        }, System.Data.IsolationLevel.Serializable, cancellationToken);
+
+        return DtoMapper.ToResponse(created!, pricing);
     }
 
     public async Task<BookingResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -81,8 +92,7 @@ public sealed class BookingService : IBookingService
         var booking = await _bookingRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Бронювання з ID '{id}' не знайдено.");
 
-        var hallName = booking.Hall?.Name ?? "Unknown";
-        return DtoMapper.ToResponse(booking, hallName);
+        return DtoMapper.ToResponse(booking);
     }
 
     public async Task CancelAsync(Guid id, CancellationToken cancellationToken = default)

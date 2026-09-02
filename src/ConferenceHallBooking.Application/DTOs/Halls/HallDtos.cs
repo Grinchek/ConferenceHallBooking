@@ -22,8 +22,8 @@ public sealed record UpdateHallRequest(
     IReadOnlyList<ServiceDto>? Services);
 
 public sealed record SearchAvailableHallsRequest(
-    DateTime Start,
-    DateTime End,
+    DateTimeOffset Start,
+    DateTimeOffset End,
     int RequiredCapacity);
 
 public sealed record AvailableHallResponse(

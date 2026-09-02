@@ -9,9 +9,9 @@ public class PricingCalculatorTests
     [Fact]
     public void Standard_hours_use_base_rate()
     {
-        // 10:00–11:00 — стандартний період
-        var start = new DateTime(2024, 9, 1, 10, 0, 0);
-        var end = new DateTime(2024, 9, 1, 11, 0, 0);
+        // 10:00–11:00 UTC — стандартний період
+        var start = new DateTime(2024, 9, 1, 10, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2024, 9, 1, 11, 0, 0, DateTimeKind.Utc);
 
         var result = _sut.CalculateHallRental(2000m, start, end);
 
@@ -23,9 +23,9 @@ public class PricingCalculatorTests
     [Fact]
     public void Morning_hours_apply_10_percent_discount()
     {
-        // 07:00–08:00 — −10%
-        var start = new DateTime(2024, 9, 1, 7, 0, 0);
-        var end = new DateTime(2024, 9, 1, 8, 0, 0);
+        // 07:00–08:00 UTC — −10%
+        var start = new DateTime(2024, 9, 1, 7, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2024, 9, 1, 8, 0, 0, DateTimeKind.Utc);
 
         var result = _sut.CalculateHallRental(2000m, start, end);
 
@@ -36,9 +36,9 @@ public class PricingCalculatorTests
     [Fact]
     public void Evening_hours_apply_20_percent_discount()
     {
-        // 19:00–20:00 — −20%
-        var start = new DateTime(2024, 9, 1, 19, 0, 0);
-        var end = new DateTime(2024, 9, 1, 20, 0, 0);
+        // 19:00–20:00 UTC — −20%
+        var start = new DateTime(2024, 9, 1, 19, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2024, 9, 1, 20, 0, 0, DateTimeKind.Utc);
 
         var result = _sut.CalculateHallRental(2000m, start, end);
 
@@ -49,9 +49,9 @@ public class PricingCalculatorTests
     [Fact]
     public void Peak_hours_apply_15_percent_markup()
     {
-        // 12:00–13:00 — +15%
-        var start = new DateTime(2024, 9, 1, 12, 0, 0);
-        var end = new DateTime(2024, 9, 1, 13, 0, 0);
+        // 12:00–13:00 UTC — +15%
+        var start = new DateTime(2024, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2024, 9, 1, 13, 0, 0, DateTimeKind.Utc);
 
         var result = _sut.CalculateHallRental(2000m, start, end);
 
@@ -62,10 +62,10 @@ public class PricingCalculatorTests
     [Fact]
     public void Mixed_period_10_to_14_splits_standard_and_peak()
     {
-        // 10:00–14:00: 2 год Standard + 2 год Peak
+        // 10:00–14:00 UTC: 2 год Standard + 2 год Peak
         // 2*2000 + 2*2000*1.15 = 4000 + 4600 = 8600
-        var start = new DateTime(2024, 9, 1, 10, 0, 0);
-        var end = new DateTime(2024, 9, 1, 14, 0, 0);
+        var start = new DateTime(2024, 9, 1, 10, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2024, 9, 1, 14, 0, 0, DateTimeKind.Utc);
 
         var result = _sut.CalculateHallRental(2000m, start, end);
 
@@ -78,12 +78,25 @@ public class PricingCalculatorTests
     [Fact]
     public void Peak_has_priority_over_standard()
     {
-        var start = new DateTime(2024, 9, 1, 12, 30, 0);
-        var end = new DateTime(2024, 9, 1, 13, 30, 0);
+        var start = new DateTime(2024, 9, 1, 12, 30, 0, DateTimeKind.Utc);
+        var end = new DateTime(2024, 9, 1, 13, 30, 0, DateTimeKind.Utc);
 
         var result = _sut.CalculateHallRental(1000m, start, end);
 
         Assert.All(result.Breakdown, item => Assert.Equal("Peak", item.PeriodName));
         Assert.Equal(1150m, result.TotalHallCost);
+    }
+
+    [Fact]
+    public void Local_kind_is_converted_to_utc_before_pricing()
+    {
+        var start = new DateTime(2024, 9, 1, 15, 0, 0, DateTimeKind.Local);
+        var end = start.AddHours(1);
+
+        var expected = _sut.CalculateHallRental(1000m, start.ToUniversalTime(), end.ToUniversalTime());
+        var actual = _sut.CalculateHallRental(1000m, start, end);
+
+        Assert.Equal(expected.TotalHallCost, actual.TotalHallCost);
+        Assert.Equal(expected.Breakdown.Count, actual.Breakdown.Count);
     }
 }

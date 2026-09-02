@@ -67,6 +67,9 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.HasKey(b => b.Id);
 
         builder.Property(b => b.CustomerName).HasMaxLength(200);
+        builder.Property(b => b.HallName)
+            .IsRequired()
+            .HasMaxLength(100);
         builder.Property(b => b.DurationHours).HasPrecision(18, 2);
         builder.Property(b => b.HallRentalCost).HasPrecision(18, 2);
         builder.Property(b => b.ServicesCost).HasPrecision(18, 2);

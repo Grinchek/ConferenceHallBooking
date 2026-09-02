@@ -2,8 +2,8 @@ namespace ConferenceHallBooking.Application.DTOs.Bookings;
 
 public sealed record CreateBookingRequest(
     Guid HallId,
-    DateTime Start,
-    DateTime End,
+    DateTimeOffset Start,
+    DateTimeOffset End,
     IReadOnlyList<string>? SelectedServices,
     string? CustomerName);
 

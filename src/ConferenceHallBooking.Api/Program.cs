@@ -16,6 +16,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddInfrastructure(connectionString);
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
 builder.Services.AddApiSwagger();
 
 builder.Services.AddHealthChecks()
