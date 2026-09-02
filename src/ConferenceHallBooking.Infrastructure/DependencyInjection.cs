@@ -9,14 +9,12 @@ namespace ConferenceHallBooking.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        services.AddSingleton<ISqlConnectionFactory>(new SqlConnectionFactory(connectionString));
-        services.AddScoped<SqlSession>();
+        services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
 
         services.AddScoped<IHallRepository, HallRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
     }

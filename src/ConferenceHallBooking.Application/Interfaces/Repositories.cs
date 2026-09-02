@@ -30,19 +30,6 @@ public interface IBookingRepository
     Task<IReadOnlyList<PeriodBookingRow>> GetBookingsGroupedByStartHourAsync(DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
 }
 
-public interface IUnitOfWork
-{
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Виконує роботу в транзакції з вказаним рівнем ізоляції (для захисту від race condition).
-    /// </summary>
-    Task ExecuteInTransactionAsync(
-        Func<CancellationToken, Task> action,
-        System.Data.IsolationLevel isolationLevel,
-        CancellationToken cancellationToken = default);
-}
-
 public sealed record BookingCountsRow(int TotalBookings, int ActiveBookings, decimal ActiveRevenue);
 
 public sealed record HallRevenueRow(

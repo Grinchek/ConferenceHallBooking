@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 
 namespace ConferenceHallBooking.Infrastructure.Data;
 
@@ -6,12 +7,11 @@ public sealed class SqlConnectionFactory : ISqlConnectionFactory
 {
     private readonly string _connectionString;
 
-    public SqlConnectionFactory(string connectionString)
+    public SqlConnectionFactory(IConfiguration configuration)
     {
-        if (string.IsNullOrWhiteSpace(connectionString))
-            throw new ArgumentException("Connection string is required.", nameof(connectionString));
-
-        _connectionString = connectionString;
+        _connectionString = configuration.GetConnectionString("Default")
+            ?? throw new InvalidOperationException(
+                "Connection string 'Default' is missing. Set it in appsettings or user secrets.");
     }
 
     public SqlConnection Create() => new(_connectionString);
