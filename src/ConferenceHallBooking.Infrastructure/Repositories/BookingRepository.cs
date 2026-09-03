@@ -112,24 +112,6 @@ public sealed class BookingRepository : IBookingRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task<bool> HasOverlapAsync(
-        Guid hallId,
-        DateTime start,
-        DateTime end,
-        CancellationToken cancellationToken = default)
-    {
-        await using var connection = await OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command
-            .AsProcedure(SqlProcedures.Bookings.HasOverlap)
-            .AddParam("@HallId", hallId)
-            .AddParam("@Start", start)
-            .AddParam("@End", end);
-
-        var result = await command.ExecuteScalarAsync(cancellationToken);
-        return Convert.ToInt32(result) == 1;
-    }
-
     public async Task<BookingCountsRow> GetBookingCountsAsync(
         DateTime? from,
         DateTime? to,

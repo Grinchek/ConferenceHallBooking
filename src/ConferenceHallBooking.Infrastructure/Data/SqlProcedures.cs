@@ -16,7 +16,6 @@ public static class SqlProcedures
 
     public static class Bookings
     {
-        public const string HasOverlap = "sp_Bookings_HasOverlap";
         public const string GetById = "sp_Bookings_GetById";
         public const string GetAll = "sp_Bookings_GetAll";
         public const string GetByDateRange = "sp_Bookings_GetByDateRange";

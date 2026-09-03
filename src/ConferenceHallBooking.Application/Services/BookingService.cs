@@ -57,10 +57,6 @@ public sealed class BookingService : IBookingService
         var pricing = _pricingCalculator.CalculateHallRental(hall.BaseHourlyRate, startUtc, endUtc);
         var durationHours = Math.Round((decimal)(endUtc - startUtc).TotalHours, 2, MidpointRounding.AwayFromZero);
 
-        if (await _bookingRepository.HasOverlapAsync(request.HallId, startUtc, endUtc, cancellationToken))
-            throw new ConflictException(
-                $"Зал '{hall.Name}' уже заброньовано на період {startUtc:g} – {endUtc:g}.");
-
         var created = new Booking(
             hall.Id,
             hall.Name,
