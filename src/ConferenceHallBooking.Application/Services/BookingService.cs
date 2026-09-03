@@ -12,20 +12,17 @@ public sealed class BookingService : IBookingService
 {
     private readonly IHallRepository _hallRepository;
     private readonly IBookingRepository _bookingRepository;
-    private readonly IUnitOfWork _unitOfWork;
     private readonly IPricingCalculator _pricingCalculator;
     private readonly IValidator<CreateBookingRequest> _validator;
 
     public BookingService(
         IHallRepository hallRepository,
         IBookingRepository bookingRepository,
-        IUnitOfWork unitOfWork,
         IPricingCalculator pricingCalculator,
         IValidator<CreateBookingRequest> validator)
     {
         _hallRepository = hallRepository;
         _bookingRepository = bookingRepository;
-        _unitOfWork = unitOfWork;
         _pricingCalculator = pricingCalculator;
         _validator = validator;
     }
@@ -60,31 +57,19 @@ public sealed class BookingService : IBookingService
         var pricing = _pricingCalculator.CalculateHallRental(hall.BaseHourlyRate, startUtc, endUtc);
         var durationHours = Math.Round((decimal)(endUtc - startUtc).TotalHours, 2, MidpointRounding.AwayFromZero);
 
-        Booking? created = null;
+        var created = new Booking(
+            hall.Id,
+            hall.Name,
+            startUtc,
+            endUtc,
+            durationHours,
+            pricing.TotalHallCost,
+            serviceItems,
+            request.CustomerName);
 
-        // Serializable + повторна перевірка overlap захищають від подвійного бронювання
-        // при паралельних запитах на той самий інтервал.
-        await _unitOfWork.ExecuteInTransactionAsync(async ct =>
-        {
-            if (await _bookingRepository.HasOverlapAsync(request.HallId, startUtc, endUtc, ct))
-                throw new ConflictException(
-                    $"Зал '{hall.Name}' уже заброньовано на період {startUtc:g} – {endUtc:g}.");
+        await _bookingRepository.AddAsync(created, cancellationToken);
 
-            created = new Booking(
-                hall.Id,
-                hall.Name,
-                startUtc,
-                endUtc,
-                durationHours,
-                pricing.TotalHallCost,
-                serviceItems,
-                request.CustomerName);
-
-            await _bookingRepository.AddAsync(created, ct);
-            await _unitOfWork.SaveChangesAsync(ct);
-        }, System.Data.IsolationLevel.Serializable, cancellationToken);
-
-        return DtoMapper.ToResponse(created!, pricing);
+        return DtoMapper.ToResponse(created, pricing);
     }
 
     public async Task<BookingResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -104,6 +89,6 @@ public sealed class BookingService : IBookingService
             throw new BusinessRuleException("Бронювання вже скасовано.");
 
         booking.Cancel();
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _bookingRepository.UpdateAsync(booking, cancellationToken);
     }
 }

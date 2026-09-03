@@ -1,3 +1,5 @@
+using ConferenceHallBooking.Domain;
+
 namespace ConferenceHallBooking.Domain.Entities;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace ConferenceHallBooking.Domain.Entities;
 /// </summary>
 public class Booking
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
+    public Guid Id { get; private set; } = SequentialGuid.Create();
 
     public Guid HallId { get; private set; }
 
@@ -38,6 +40,43 @@ public class Booking
 
     private Booking()
     {
+    }
+
+    internal static Booking Restore(
+        Guid id,
+        Guid hallId,
+        string hallName,
+        DateTime startUtc,
+        DateTime endUtc,
+        decimal durationHours,
+        string? customerName,
+        decimal hallRentalCost,
+        decimal servicesCost,
+        decimal totalCost,
+        bool isCancelled,
+        DateTime createdAtUtc)
+    {
+        return new Booking
+        {
+            Id = id,
+            HallId = hallId,
+            HallName = hallName,
+            StartUtc = startUtc,
+            EndUtc = endUtc,
+            DurationHours = durationHours,
+            CustomerName = customerName,
+            HallRentalCost = hallRentalCost,
+            ServicesCost = servicesCost,
+            TotalCost = totalCost,
+            IsCancelled = isCancelled,
+            CreatedAtUtc = createdAtUtc
+        };
+    }
+
+    internal void RestoreSelectedServices(IEnumerable<BookingServiceItem> services)
+    {
+        _selectedServices.Clear();
+        _selectedServices.AddRange(services);
     }
 
     public Booking(

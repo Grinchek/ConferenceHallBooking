@@ -11,7 +11,6 @@ namespace ConferenceHallBooking.Application.Services;
 public sealed class HallManagementService : IHallService
 {
     private readonly IHallRepository _hallRepository;
-    private readonly IUnitOfWork _unitOfWork;
     private readonly IPricingCalculator _pricingCalculator;
     private readonly IValidator<CreateHallRequest> _createValidator;
     private readonly IValidator<UpdateHallRequest> _updateValidator;
@@ -19,14 +18,12 @@ public sealed class HallManagementService : IHallService
 
     public HallManagementService(
         IHallRepository hallRepository,
-        IUnitOfWork unitOfWork,
         IPricingCalculator pricingCalculator,
         IValidator<CreateHallRequest> createValidator,
         IValidator<UpdateHallRequest> updateValidator,
         IValidator<SearchAvailableHallsRequest> searchValidator)
     {
         _hallRepository = hallRepository;
-        _unitOfWork = unitOfWork;
         _pricingCalculator = pricingCalculator;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -51,7 +48,6 @@ public sealed class HallManagementService : IHallService
             services.Select(s => new HallService(s.Name, s.Price)));
 
         await _hallRepository.AddAsync(hall, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return DtoMapper.ToResponse(hall);
     }
@@ -60,7 +56,6 @@ public sealed class HallManagementService : IHallService
     {
         await _updateValidator.ValidateAndThrowAsync(request, cancellationToken);
 
-        // Без Include(Services): інакше change tracker конфліктує з SetServicesAsync.
         var hall = await _hallRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Зал з ID '{id}' не знайдено.");
 
@@ -78,7 +73,6 @@ public sealed class HallManagementService : IHallService
         }
 
         await _hallRepository.UpdateAsync(hall, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var updated = await _hallRepository.GetByIdWithDetailsAsync(id, cancellationToken);
         return DtoMapper.ToResponse(updated!);
@@ -91,7 +85,6 @@ public sealed class HallManagementService : IHallService
 
         hall.SoftDelete();
         await _hallRepository.UpdateAsync(hall, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<HallResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
