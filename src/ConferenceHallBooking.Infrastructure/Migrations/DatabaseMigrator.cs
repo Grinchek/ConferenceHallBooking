@@ -2,28 +2,56 @@ using System.Reflection;
 using ConferenceHallBooking.Infrastructure.Data;
 using DbUp;
 using DbUp.Engine;
+using DbUp.Helpers;
 using Microsoft.Data.SqlClient;
 
 namespace ConferenceHallBooking.Infrastructure.Migrations;
 
 public static class DatabaseMigrator
 {
+    private static readonly Assembly ScriptsAssembly = Assembly.GetExecutingAssembly();
+
     public static void Migrate(string connectionString)
     {
         EnsureSchemaExists(connectionString);
 
-        var upgrader = DeployChanges.To
-            .SqlDatabase(connectionString)
-            .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
-            .JournalToSqlTable(SqlSchema.Name, "SchemaVersions")
-            .WithTransactionPerScript()
-            .LogToConsole()
-            .Build();
+        // Tables/types/seed: run once, tracked in SchemaVersions.
+        EnsureSuccessful(
+            DeployChanges.To
+                .SqlDatabase(connectionString)
+                .WithScriptsEmbeddedInAssembly(ScriptsAssembly, IsMigrationScript)
+                .JournalToSqlTable(SqlSchema.Name, "SchemaVersions")
+                .WithTransactionPerScript()
+                .LogToConsole()
+                .Build()
+                .PerformUpgrade(),
+            "Database migration");
 
-        DatabaseUpgradeResult result = upgrader.PerformUpgrade();
+        // Stored procedures: CREATE OR ALTER is idempotent, re-apply on every startup.
+        // NullJournal avoids permanently skipping an updated .sql with the same file name.
+        EnsureSuccessful(
+            DeployChanges.To
+                .SqlDatabase(connectionString)
+                .WithScriptsEmbeddedInAssembly(ScriptsAssembly, IsProcedureScript)
+                .JournalTo(new NullJournal())
+                .WithTransactionPerScript()
+                .LogToConsole()
+                .Build()
+                .PerformUpgrade(),
+            "Stored procedure deployment");
+    }
 
+    // Folder names like 01_Migrations become _01_Migrations in embedded resource names.
+    private static bool IsMigrationScript(string scriptName) =>
+        scriptName.Contains(".Scripts._01_Migrations.", StringComparison.Ordinal);
+
+    private static bool IsProcedureScript(string scriptName) =>
+        scriptName.Contains(".Scripts._02_Procedures.", StringComparison.Ordinal);
+
+    private static void EnsureSuccessful(DatabaseUpgradeResult result, string stepName)
+    {
         if (!result.Successful)
-            throw new InvalidOperationException($"Database migration failed: {result.Error.Message}", result.Error);
+            throw new InvalidOperationException($"{stepName} failed: {result.Error.Message}", result.Error);
     }
 
     private static void EnsureSchemaExists(string connectionString)
