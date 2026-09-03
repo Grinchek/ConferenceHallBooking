@@ -1,3 +1,4 @@
+using System.Data;
 using ConferenceHallBooking.Application.Interfaces;
 using ConferenceHallBooking.Domain.Entities;
 using ConferenceHallBooking.Infrastructure.Data;
@@ -19,7 +20,7 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.GetById)
-            .AddParam("@Id", id);
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, id);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -34,7 +35,7 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.GetByIdWithDetails)
-            .AddParam("@Id", id);
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, id);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -72,9 +73,9 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.SearchAvailable)
-            .AddParam("@Start", start)
-            .AddParam("@End", end)
-            .AddParam("@RequiredCapacity", requiredCapacity);
+            .AddParam("@Start", SqlDbType.DateTime2, start)
+            .AddParam("@End", SqlDbType.DateTime2, end)
+            .AddParam("@RequiredCapacity", SqlDbType.Int, requiredCapacity);
 
         return await ReadHallsWithServicesAsync(command, cancellationToken);
     }
@@ -85,13 +86,13 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.Insert)
-            .AddParam("@Id", hall.Id)
-            .AddParam("@Name", hall.Name)
-            .AddParam("@Capacity", hall.Capacity)
-            .AddParam("@BaseHourlyRate", hall.BaseHourlyRate)
-            .AddParam("@IsDeleted", hall.IsDeleted)
-            .AddParam("@CreatedAtUtc", hall.CreatedAtUtc)
-            .AddParam("@UpdatedAtUtc", hall.UpdatedAtUtc)
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, hall.Id)
+            .AddParam("@Name", SqlDbType.NVarChar, hall.Name, 100)
+            .AddParam("@Capacity", SqlDbType.Int, hall.Capacity)
+            .AddParam("@BaseHourlyRate", SqlDbType.Decimal, 18, 2, hall.BaseHourlyRate)
+            .AddParam("@IsDeleted", SqlDbType.Bit, hall.IsDeleted)
+            .AddParam("@CreatedAtUtc", SqlDbType.DateTime2, hall.CreatedAtUtc)
+            .AddParam("@UpdatedAtUtc", SqlDbType.DateTime2, hall.UpdatedAtUtc)
             .AddHallServiceTvpParam(
                 "@Services",
                 hall.Services.Select(s => (s.Id, s.Name, s.Price)));
@@ -105,12 +106,12 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.Update)
-            .AddParam("@Id", hall.Id)
-            .AddParam("@Name", hall.Name)
-            .AddParam("@Capacity", hall.Capacity)
-            .AddParam("@BaseHourlyRate", hall.BaseHourlyRate)
-            .AddParam("@IsDeleted", hall.IsDeleted)
-            .AddParam("@UpdatedAtUtc", hall.UpdatedAtUtc);
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, hall.Id)
+            .AddParam("@Name", SqlDbType.NVarChar, hall.Name, 100)
+            .AddParam("@Capacity", SqlDbType.Int, hall.Capacity)
+            .AddParam("@BaseHourlyRate", SqlDbType.Decimal, 18, 2, hall.BaseHourlyRate)
+            .AddParam("@IsDeleted", SqlDbType.Bit, hall.IsDeleted)
+            .AddParam("@UpdatedAtUtc", SqlDbType.DateTime2, hall.UpdatedAtUtc);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -134,7 +135,7 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.SetServices)
-            .AddParam("@HallId", hallId)
+            .AddParam("@HallId", SqlDbType.UniqueIdentifier, hallId)
             .AddHallServiceTvpParam("@Services", rows);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -149,8 +150,8 @@ public sealed class HallRepository : IHallRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.ExistsByName)
-            .AddParam("@Name", name.Trim())
-            .AddParam("@ExcludeId", excludeId);
+            .AddParam("@Name", SqlDbType.NVarChar, name.Trim(), 100)
+            .AddParam("@ExcludeId", SqlDbType.UniqueIdentifier, excludeId);
 
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result) == 1;

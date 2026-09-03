@@ -1,3 +1,4 @@
+using System.Data;
 using ConferenceHallBooking.Application.Interfaces;
 using ConferenceHallBooking.Domain.Entities;
 using ConferenceHallBooking.Domain.Exceptions;
@@ -20,7 +21,7 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.GetById)
-            .AddParam("@Id", id);
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, id);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -47,7 +48,7 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.GetAll)
-            .AddParam("@IncludeCancelled", includeCancelled);
+            .AddParam("@IncludeCancelled", SqlDbType.Bit, includeCancelled);
 
         return await ReadBookingsWithServicesAsync(command, cancellationToken);
     }
@@ -61,8 +62,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.GetByDateRange)
-            .AddParam("@From", from)
-            .AddParam("@To", to);
+            .AddParam("@From", SqlDbType.DateTime2, from)
+            .AddParam("@To", SqlDbType.DateTime2, to);
 
         return await ReadBookingsWithServicesAsync(command, cancellationToken);
     }
@@ -73,18 +74,18 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.Insert)
-            .AddParam("@Id", booking.Id)
-            .AddParam("@HallId", booking.HallId)
-            .AddParam("@HallName", booking.HallName)
-            .AddParam("@StartUtc", booking.StartUtc)
-            .AddParam("@EndUtc", booking.EndUtc)
-            .AddParam("@DurationHours", booking.DurationHours)
-            .AddParam("@CustomerName", booking.CustomerName)
-            .AddParam("@HallRentalCost", booking.HallRentalCost)
-            .AddParam("@ServicesCost", booking.ServicesCost)
-            .AddParam("@TotalCost", booking.TotalCost)
-            .AddParam("@IsCancelled", booking.IsCancelled)
-            .AddParam("@CreatedAtUtc", booking.CreatedAtUtc)
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, booking.Id)
+            .AddParam("@HallId", SqlDbType.UniqueIdentifier, booking.HallId)
+            .AddParam("@HallName", SqlDbType.NVarChar, booking.HallName, 100)
+            .AddParam("@StartUtc", SqlDbType.DateTime2, booking.StartUtc)
+            .AddParam("@EndUtc", SqlDbType.DateTime2, booking.EndUtc)
+            .AddParam("@DurationHours", SqlDbType.Decimal, 18, 2, booking.DurationHours)
+            .AddParam("@CustomerName", SqlDbType.NVarChar, booking.CustomerName, 200)
+            .AddParam("@HallRentalCost", SqlDbType.Decimal, 18, 2, booking.HallRentalCost)
+            .AddParam("@ServicesCost", SqlDbType.Decimal, 18, 2, booking.ServicesCost)
+            .AddParam("@TotalCost", SqlDbType.Decimal, 18, 2, booking.TotalCost)
+            .AddParam("@IsCancelled", SqlDbType.Bit, booking.IsCancelled)
+            .AddParam("@CreatedAtUtc", SqlDbType.DateTime2, booking.CreatedAtUtc)
             .AddHallServiceTvpParam(
                 "@Services",
                 booking.SelectedServices.Select(s => (s.Id, s.Name, s.Price)));
@@ -106,8 +107,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.Update)
-            .AddParam("@Id", booking.Id)
-            .AddParam("@IsCancelled", booking.IsCancelled);
+            .AddParam("@Id", SqlDbType.UniqueIdentifier, booking.Id)
+            .AddParam("@IsCancelled", SqlDbType.Bit, booking.IsCancelled);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -121,8 +122,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetBookingCounts)
-            .AddParam("@From", from)
-            .AddParam("@To", to);
+            .AddParam("@From", SqlDbType.DateTime2, from)
+            .AddParam("@To", SqlDbType.DateTime2, to);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         await reader.ReadAsync(cancellationToken);
@@ -142,8 +143,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetRevenueByHall)
-            .AddParam("@From", from)
-            .AddParam("@To", to);
+            .AddParam("@From", SqlDbType.DateTime2, from)
+            .AddParam("@To", SqlDbType.DateTime2, to);
 
         var rows = new List<HallRevenueRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -170,8 +171,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetOccupancyByHall)
-            .AddParam("@RangeStart", rangeStart)
-            .AddParam("@RangeEnd", rangeEnd);
+            .AddParam("@RangeStart", SqlDbType.DateTime2, rangeStart)
+            .AddParam("@RangeEnd", SqlDbType.DateTime2, rangeEnd);
 
         var rows = new List<HallOccupancyRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -197,8 +198,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetPopularServices)
-            .AddParam("@From", from)
-            .AddParam("@To", to);
+            .AddParam("@From", SqlDbType.DateTime2, from)
+            .AddParam("@To", SqlDbType.DateTime2, to);
 
         var rows = new List<PopularServiceRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -222,8 +223,8 @@ public sealed class BookingRepository : IBookingRepository
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetBookingsByStart)
-            .AddParam("@From", from)
-            .AddParam("@To", to);
+            .AddParam("@From", SqlDbType.DateTime2, from)
+            .AddParam("@To", SqlDbType.DateTime2, to);
 
         var rows = new List<PeriodBookingRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);

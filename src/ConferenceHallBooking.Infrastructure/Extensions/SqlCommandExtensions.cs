@@ -13,9 +13,33 @@ public static class SqlCommandExtensions
         return command;
     }
 
-    public static SqlCommand AddParam(this SqlCommand command, string name, object? value)
+    public static SqlCommand AddParam(
+        this SqlCommand command,
+        string name,
+        SqlDbType type,
+        object? value,
+        int? size = null)
     {
-        command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+        var parameter = size.HasValue
+            ? command.Parameters.Add(name, type, size.Value)
+            : command.Parameters.Add(name, type);
+
+        parameter.Value = value ?? DBNull.Value;
+        return command;
+    }
+
+    public static SqlCommand AddParam(
+        this SqlCommand command,
+        string name,
+        SqlDbType type,
+        byte precision,
+        byte scale,
+        object? value)
+    {
+        var parameter = command.Parameters.Add(name, type);
+        parameter.Precision = precision;
+        parameter.Scale = scale;
+        parameter.Value = value ?? DBNull.Value;
         return command;
     }
 
