@@ -7,16 +7,16 @@ using Microsoft.Data.SqlClient;
 
 namespace ConferenceHallBooking.Infrastructure.Repositories;
 
-public sealed class HallRepository : IHallRepository
+public sealed class HallRepository : AdoRepository, IHallRepository
 {
-    private readonly ISqlConnectionFactory _connectionFactory;
-
-    public HallRepository(ISqlConnectionFactory connectionFactory) =>
-        _connectionFactory = connectionFactory;
+    public HallRepository(ISqlConnectionFactory connectionFactory)
+        : base(connectionFactory)
+    {
+    }
 
     public async Task<Hall?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.GetById)
@@ -31,7 +31,7 @@ public sealed class HallRepository : IHallRepository
 
     public async Task<Hall?> GetByIdWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.GetByIdWithDetails)
@@ -56,7 +56,7 @@ public sealed class HallRepository : IHallRepository
 
     public async Task<IReadOnlyList<Hall>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.AsProcedure(SqlProcedures.Halls.GetAll);
 
@@ -69,7 +69,7 @@ public sealed class HallRepository : IHallRepository
         int requiredCapacity,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.SearchAvailable)
@@ -82,7 +82,7 @@ public sealed class HallRepository : IHallRepository
 
     public async Task AddAsync(Hall hall, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.Insert)
@@ -102,7 +102,7 @@ public sealed class HallRepository : IHallRepository
 
     public async Task UpdateAsync(Hall hall, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.Update)
@@ -131,7 +131,7 @@ public sealed class HallRepository : IHallRepository
             })
             .ToList();
 
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.SetServices)
@@ -146,7 +146,7 @@ public sealed class HallRepository : IHallRepository
         Guid? excludeId = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Halls.ExistsByName)
@@ -155,13 +155,6 @@ public sealed class HallRepository : IHallRepository
 
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result) == 1;
-    }
-
-    private async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)
-    {
-        var connection = _connectionFactory.Create();
-        await connection.OpenAsync(cancellationToken);
-        return connection;
     }
 
     private static async Task<IReadOnlyList<Hall>> ReadHallsWithServicesAsync(

@@ -8,16 +8,16 @@ using Microsoft.Data.SqlClient;
 
 namespace ConferenceHallBooking.Infrastructure.Repositories;
 
-public sealed class BookingRepository : IBookingRepository
+public sealed class BookingRepository : AdoRepository, IBookingRepository
 {
-    private readonly ISqlConnectionFactory _connectionFactory;
-
-    public BookingRepository(ISqlConnectionFactory connectionFactory) =>
-        _connectionFactory = connectionFactory;
+    public BookingRepository(ISqlConnectionFactory connectionFactory)
+        : base(connectionFactory)
+    {
+    }
 
     public async Task<Booking?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.GetById)
@@ -44,7 +44,7 @@ public sealed class BookingRepository : IBookingRepository
         bool includeCancelled = false,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.GetAll)
@@ -58,7 +58,7 @@ public sealed class BookingRepository : IBookingRepository
         DateTime to,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.GetByDateRange)
@@ -70,7 +70,7 @@ public sealed class BookingRepository : IBookingRepository
 
     public async Task AddAsync(Booking booking, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.Insert)
@@ -103,7 +103,7 @@ public sealed class BookingRepository : IBookingRepository
 
     public async Task UpdateAsync(Booking booking, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Bookings.Update)
@@ -118,7 +118,7 @@ public sealed class BookingRepository : IBookingRepository
         DateTime? to,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetBookingCounts)
@@ -139,7 +139,7 @@ public sealed class BookingRepository : IBookingRepository
         DateTime? to,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetRevenueByHall)
@@ -167,7 +167,7 @@ public sealed class BookingRepository : IBookingRepository
         DateTime rangeEnd,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetOccupancyByHall)
@@ -194,7 +194,7 @@ public sealed class BookingRepository : IBookingRepository
         DateTime? to,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetPopularServices)
@@ -219,7 +219,7 @@ public sealed class BookingRepository : IBookingRepository
         DateTime? to,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command
             .AsProcedure(SqlProcedures.Reports.GetBookingsByStart)
@@ -236,13 +236,6 @@ public sealed class BookingRepository : IBookingRepository
         }
 
         return rows;
-    }
-
-    private async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)
-    {
-        var connection = _connectionFactory.Create();
-        await connection.OpenAsync(cancellationToken);
-        return connection;
     }
 
     private static async Task<IReadOnlyList<Booking>> ReadBookingsWithServicesAsync(
