@@ -1,11 +1,5 @@
 namespace ConferenceHallBooking.LoadTesting;
 
-internal enum LoadEngineKind
-{
-    Semaphore,
-    ForEach
-}
-
 internal sealed class LoadTestOptions
 {
     public string BaseUrl { get; init; } = "http://localhost:5105";
@@ -13,7 +7,7 @@ internal sealed class LoadTestOptions
     public int TaskCount { get; init; } = 1000;
     public int Concurrency { get; init; } = 10;
     public int[] Scenarios { get; init; } = [];
-    public LoadEngineKind Engine { get; init; } = LoadEngineKind.Semaphore;
+    public bool Cleanup { get; init; } = true;
 
     public IReadOnlyList<int> ConcurrencyLevels =>
         Scenarios.Length > 0 ? Scenarios : [Concurrency];
@@ -25,7 +19,7 @@ internal sealed class LoadTestOptions
         var taskCount = 1000;
         var concurrency = 10;
         int[] scenarios = [];
-        var engine = LoadEngineKind.Semaphore;
+        var cleanup = true;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -56,13 +50,11 @@ internal sealed class LoadTestOptions
                     if (scenarios.Length == 0)
                         throw new ArgumentException("--scenarios має містити хоча б одне число.");
                     break;
-                case "--engine":
-                    engine = Next().ToLowerInvariant() switch
-                    {
-                        "semaphore" => LoadEngineKind.Semaphore,
-                        "foreach" => LoadEngineKind.ForEach,
-                        _ => throw new ArgumentException("--engine: очікується semaphore або foreach.")
-                    };
+                case "--cleanup":
+                    cleanup = true;
+                    break;
+                case "--no-cleanup":
+                    cleanup = false;
                     break;
                 case "--help":
                 case "-h":
@@ -79,7 +71,7 @@ internal sealed class LoadTestOptions
             TaskCount = taskCount,
             Concurrency = concurrency,
             Scenarios = scenarios,
-            Engine = engine
+            Cleanup = cleanup
         };
     }
 
@@ -104,13 +96,18 @@ internal sealed class LoadTestOptions
               --tasks <n>            Кількість асинхронних задач (default: 1000)
               --concurrency <n>      Одночасних HTTP-запитів (default: 10)
               --scenarios <a,b,c>    Кілька рівнів concurrency, напр. 10,50,100
-              --engine <name>        semaphore (default) | foreach
+              --cleanup              Soft-delete тестових залів після прогонів (default)
+              --no-cleanup           Не прибирати тестові зали
               --help, -h             Довідка
+
+            Паралельність: N задач (Task.WhenAll) + SemaphoreSlim(concurrency).
+            Мікс: переважно GET; POST/PUT залів рідше. PUT лише по створених у прогоні.
+            Cleanup: DELETE через API (soft-delete), seed-зали А/B/C не чіпає.
 
             Приклади:
               dotnet run -- --tasks 1000 --concurrency 10
               dotnet run -- --tasks 1000 --scenarios 10,50,100
-              dotnet run -- --engine foreach --scenarios 10,50,100
+              dotnet run -- --tasks 1000 --concurrency 10 --no-cleanup
             """);
     }
 }

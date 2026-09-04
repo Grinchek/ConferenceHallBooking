@@ -1,6 +1,6 @@
 # Навантажувальне тестування (dev)
 
-Консольний клієнт, який емулює одночасну роботу багатьох клієнтів Web API: GET / POST / PUT, асинхронно, з обмеженням паралельності та збором статистики.
+Консольний клієнт, який емулює одночасну роботу багатьох клієнтів Web API: GET / POST / PUT, асинхронно, з обмеженням паралельності через `SemaphoreSlim` та збором статистики.
 
 ## Передумови
 
@@ -32,36 +32,28 @@ dotnet run -- [опції]
 | `--base-url` | `http://localhost:5105` | Базова адреса API |
 | `--api-key` | `dev-api-key-change-me` | Значення `X-Api-Key` |
 | `--tasks` | `1000` | Кількість асинхронних задач за один прогін |
-| `--concurrency` | `10` | Максимум одночасних HTTP-запитів |
+| `--concurrency` | `10` | Максимум одночасних HTTP-запитів (`SemaphoreSlim`) |
 | `--scenarios` | — | Кілька рівнів concurrency через кому, напр. `10,50,100` |
-| `--engine` | `semaphore` | `semaphore` або `foreach` |
 | `--help` | — | Довідка |
 
 Якщо задано `--scenarios`, значення `--concurrency` для прогонів не використовується — ганяються всі перелічені рівні підряд.
 
-### Режими (`--engine`)
+### Як працює паралельність
 
-- **`semaphore`** (основний) — створюється N задач (`Task.WhenAll`), одночасність обмежує `SemaphoreSlim`.
-- **`foreach`** — той самий workload через `Parallel.ForEachAsync` з `MaxDegreeOfParallelism`.
+Створюється N асинхронних задач (`Task.WhenAll`). Перед кожним HTTP-запитом задача бере слот у `SemaphoreSlim(concurrency)`, після відповіді — звільняє. Так одночасно до сервера йде не більше заданої кількості запитів.
 
 ## Приклади (відповідають ТЗ)
 
-Мінімум: 1000 задач / 10 concurrent (semaphore):
+Мінімум: 1000 задач / 10 concurrent:
 
 ```bash
 dotnet run -- --tasks 1000 --concurrency 10
 ```
 
-Додаткове завдання — порівняти concurrency:
+Порівняти concurrency:
 
 ```bash
 dotnet run -- --tasks 1000 --scenarios 10,50,100
-```
-
-Те саме в режимі `foreach`:
-
-```bash
-dotnet run -- --engine foreach --tasks 1000 --scenarios 10,50,100
 ```
 
 Інший хост / ключ:
@@ -83,19 +75,34 @@ dotnet run -- --base-url http://localhost:5105 --api-key dev-api-key-change-me -
 
 ## Що саме б’є по API
 
-Рівномірний мікс (за індексом задачі):
+Мікс (за індексом задачі, легший на write):
 
-1. `GET /api/v1/halls`
-2. `GET /api/v1/halls/available?...`
-3. `GET /api/v1/reports/summary`
-4. `POST /api/v1/halls` (унікальна назва `LoadDev-...`)
-5. `PUT /api/v1/halls/{id}` (id з warmup `GET /halls`)
+| Частка | Метод | Endpoint |
+|--------|--------|----------|
+| 40% | GET | `/api/v1/halls` |
+| 25% | GET | `/api/v1/halls/available?...` |
+| 20% | GET | `/api/v1/reports/summary` |
+| 10% | POST | `/api/v1/halls` |
+| 5% | PUT | `/api/v1/halls/{id}` |
 
 Спочатку виконується warmup: `GET /health` і `GET /api/v1/halls`.
+
+### Cleanup після прогонів
+
+За замовчуванням увімкнено (`--cleanup`):
+
+- трекаються зали, створені через `POST` у цьому запуску;
+- `PUT` виконується **лише** по них (seed Зал А/B/C не змінюються);
+- в кінці — `DELETE /api/v1/halls/{id}` (soft-delete) для створених і залишків `LoadDev-*` / `LoadPut-*` (seed id не чіпає).
+
+Вимкнути: `--no-cleanup`.  
+Якщо БД уже роздута зі старих прогонів — разово `cleanup-test-halls.sql` у SSMS.
 
 ## Поради
 
 - Перед довгими прогонами API має бути вже запущений і відповідати на `/health`.
-- Rate limit API зараз **2000** запитів/хв на IP — для сценаріїв `10/50/100 × 1000` задач робіть паузу між повними порівняльними прогонами або ганяйте сценарії окремо, якщо бачите багато помилок.
-- `POST` створює нові зали в БД; `PUT` змінює існуючі — для shared/dev БД це очікувано.
+- Для локального тесту зручний профіль **http**: `dotnet run --launch-profile http` → `http://localhost:5105` (у Development немає HTTPS-редиректу).
+- Якщо б’єте в `https://localhost:7008`, тестер для localhost ігнорує помилки dev-сертифіката.
+- Rate limit API: у **Development** зараз **20000**/хв (щоб 10+50+100 і cleanup вміщались у вікно); у Production — 2000.
+- `POST` створює нові зали; після прогону cleanup робить soft-delete. Для hard-delete зі старих прогонів — `cleanup-test-halls.sql`.
 - Зупинка: `Ctrl+C`.

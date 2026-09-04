@@ -22,24 +22,32 @@ builder.Services.AddApiSwagger();
 builder.Services.AddHealthChecks()
     .AddDatabaseHealthCheck();
 
-// Захист від зловживань: rate limiting
+// Rate limiting: у Development вищий ліміт під порівняльні load-прогони (3×1000 + cleanup).
+var rateLimitPerMinute = builder.Environment.IsDevelopment() ? 20_000 : 2_000;
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddFixedWindowLimiter("default", limiter =>
     {
-        limiter.PermitLimit = 2000;
+        limiter.PermitLimit = rateLimitPerMinute;
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
     });
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-        RateLimitPartition.GetFixedWindowLimiter(
+    {
+        var path = context.Request.Path.Value ?? string.Empty;
+        if (path.StartsWith("/health", StringComparison.OrdinalIgnoreCase))
+            return RateLimitPartition.GetNoLimiter("health");
+
+        return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 2000,
+                PermitLimit = rateLimitPerMinute,
                 Window = TimeSpan.FromMinutes(1)
-            }));
+            });
+    });
 });
 
 builder.Services.AddCors(options =>
@@ -66,7 +74,10 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Demo"))
     });
 }
 
-app.UseHttpsRedirection();
+// У Development залишаємо чистий HTTP (профіль http / load testing без SSL-редіректу).
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
 app.UseCors("Default");
 app.UseRateLimiter();
 app.UseMiddleware<ApiKeyMiddleware>();
