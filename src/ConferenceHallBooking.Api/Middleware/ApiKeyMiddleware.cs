@@ -49,7 +49,7 @@ public sealed class ApiKeyMiddleware
 
     private static bool IsPublicPath(string path) =>
         path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase) ||
-        path.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Порівняння без timing-атак.</summary>

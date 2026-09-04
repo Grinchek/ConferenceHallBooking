@@ -3,23 +3,24 @@ using ConferenceHallBooking.Api.Extensions;
 using ConferenceHallBooking.Api.Middleware;
 using ConferenceHallBooking.Application;
 using ConferenceHallBooking.Infrastructure;
-using ConferenceHallBooking.Infrastructure.Seed;
+using ConferenceHallBooking.Infrastructure.Migrations;
 using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
+builder.Services.AddInfrastructure();
+
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException(
         "Connection string 'Default' is missing. Set it in appsettings or user secrets.");
 
-builder.Services.AddInfrastructure(connectionString);
-
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
 builder.Services.AddApiSwagger();
 
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ConferenceHallBooking.Infrastructure.Persistence.AppDbContext>();
+    .AddDatabaseHealthCheck();
 
 // Захист від зловживань: rate limiting
 builder.Services.AddRateLimiter(options =>
@@ -51,7 +52,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-await DatabaseSeeder.SeedAsync(app.Services);
+DatabaseMigrator.Migrate(connectionString);
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 

@@ -71,6 +71,10 @@ public sealed class CreateBookingRequestValidator : AbstractValidator<CreateBook
         RuleFor(x => x.HallId)
             .NotEmpty();
 
+        RuleFor(x => x.Start)
+            .GreaterThanOrEqualTo(_ => DateTimeOffset.UtcNow)
+            .WithMessage("Не можна бронювати на минулий час.");
+
         RuleFor(x => x.End)
             .GreaterThan(x => x.Start).WithMessage("Час завершення має бути пізніше за час початку.");
 

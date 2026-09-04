@@ -1,3 +1,5 @@
+using ConferenceHallBooking.Domain;
+
 namespace ConferenceHallBooking.Domain.Entities;
 
 /// <summary>
@@ -5,11 +7,14 @@ namespace ConferenceHallBooking.Domain.Entities;
 /// </summary>
 public class Booking
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
+    public Guid Id { get; private set; } = SequentialGuid.Create();
 
     public Guid HallId { get; private set; }
 
     public Hall? Hall { get; private set; }
+
+    /// <summary>Знімок назви залу на момент створення (не залежить від подальшого видалення залу).</summary>
+    public string HallName { get; private set; } = string.Empty;
 
     public DateTime StartUtc { get; private set; }
 
@@ -37,8 +42,46 @@ public class Booking
     {
     }
 
+    internal static Booking Restore(
+        Guid id,
+        Guid hallId,
+        string hallName,
+        DateTime startUtc,
+        DateTime endUtc,
+        decimal durationHours,
+        string? customerName,
+        decimal hallRentalCost,
+        decimal servicesCost,
+        decimal totalCost,
+        bool isCancelled,
+        DateTime createdAtUtc)
+    {
+        return new Booking
+        {
+            Id = id,
+            HallId = hallId,
+            HallName = hallName,
+            StartUtc = startUtc,
+            EndUtc = endUtc,
+            DurationHours = durationHours,
+            CustomerName = customerName,
+            HallRentalCost = hallRentalCost,
+            ServicesCost = servicesCost,
+            TotalCost = totalCost,
+            IsCancelled = isCancelled,
+            CreatedAtUtc = createdAtUtc
+        };
+    }
+
+    internal void RestoreSelectedServices(IEnumerable<BookingServiceItem> services)
+    {
+        _selectedServices.Clear();
+        _selectedServices.AddRange(services);
+    }
+
     public Booking(
         Guid hallId,
+        string hallName,
         DateTime startUtc,
         DateTime endUtc,
         decimal durationHours,
@@ -46,6 +89,12 @@ public class Booking
         IEnumerable<BookingServiceItem> selectedServices,
         string? customerName = null)
     {
+        if (string.IsNullOrWhiteSpace(hallName))
+            throw new ArgumentException("Назва залу є обов'язковою.", nameof(hallName));
+
+        startUtc = EnsureUtc(startUtc);
+        endUtc = EnsureUtc(endUtc);
+
         if (endUtc <= startUtc)
             throw new ArgumentException("Час завершення має бути пізніше за час початку.");
 
@@ -53,6 +102,7 @@ public class Booking
             throw new ArgumentOutOfRangeException(nameof(durationHours));
 
         HallId = hallId;
+        HallName = hallName.Trim();
         StartUtc = startUtc;
         EndUtc = endUtc;
         DurationHours = durationHours;
@@ -65,10 +115,18 @@ public class Booking
     }
 
     public bool Overlaps(DateTime startUtc, DateTime endUtc) =>
-        StartUtc < endUtc && EndUtc > startUtc;
+        StartUtc < EnsureUtc(endUtc) && EndUtc > EnsureUtc(startUtc);
 
     public void Cancel()
     {
         IsCancelled = true;
     }
+
+    private static DateTime EnsureUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
 }

@@ -1,3 +1,5 @@
+using ConferenceHallBooking.Domain;
+
 namespace ConferenceHallBooking.Domain.Entities;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace ConferenceHallBooking.Domain.Entities;
 /// </summary>
 public class BookingServiceItem
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
+    public Guid Id { get; private set; } = SequentialGuid.Create();
 
     public Guid BookingId { get; private set; }
 
@@ -17,6 +19,15 @@ public class BookingServiceItem
     private BookingServiceItem()
     {
     }
+
+    internal static BookingServiceItem Restore(Guid id, Guid bookingId, string name, decimal price) =>
+        new()
+        {
+            Id = id,
+            BookingId = bookingId,
+            Name = name,
+            Price = price
+        };
 
     public BookingServiceItem(string name, decimal price)
     {
